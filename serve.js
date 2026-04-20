@@ -8,7 +8,7 @@
     const modKey = isMac ? '⌘' : 'Ctrl';
     const altKey = isMac ? '⌥' : 'Alt';
     
-    // Internal clipboard (not system clipboard)
+    // Internal clipboard
     let internalClipboard = '';
     let clipboardTimestamp = null;
     
@@ -59,52 +59,36 @@
         }
     };
     
-    // Markdown renderer with proper code handling
+    // Markdown renderer
     const markdown = {
         render(text) {
             if (!text) return '';
-            
             let html = text;
             
-            // Code blocks - preserve indentation for IDE pasting
             html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
                 lang = lang || 'code';
-                // Preserve original code with proper spacing
                 const escaped = this.escapeHtml(code);
                 return `<div class="sdp-code-block">
                             <div class="sdp-code-header">
                                 <span class="sdp-code-lang">${lang}</span>
                                 <button class="sdp-copy-code" data-code="${this.escapeHtml(code.replace(/'/g, "\\'"))}">📋 Copy</button>
                             </div>
-                            <pre><code class="language-${lang}">${escaped}</code></pre>
+                            <pre><code>${escaped}</code></pre>
                         </div>`;
             });
             
-            // Inline code
             html = html.replace(/`([^`]+)`/g, '<code class="sdp-inline-code">$1</code>');
-            
-            // Headers
             html = html.replace(/^### (.*$)/gm, '<h3 class="sdp-h3">$1</h3>');
             html = html.replace(/^## (.*$)/gm, '<h2 class="sdp-h2">$1</h2>');
             html = html.replace(/^# (.*$)/gm, '<h1 class="sdp-h1">$1</h1>');
-            
-            // Bold & Italic
             html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
-            
-            // Links
             html = html.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" class="sdp-link">$1</a>');
-            
-            // Lists
             html = html.replace(/^\* (.*$)/gm, '<li>$1</li>');
             html = html.replace(/^- (.*$)/gm, '<li>$1</li>');
             html = html.replace(/^\d+\. (.*$)/gm, '<li>$1</li>');
             html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul class="sdp-list">$&</ul>');
-            
-            // Blockquotes
             html = html.replace(/^> (.*$)/gm, '<blockquote class="sdp-blockquote">$1</blockquote>');
-            
-            // Line breaks
             html = html.replace(/\n\n/g, '<br><br>');
             html = html.replace(/\n/g, '<br>');
             
@@ -119,7 +103,6 @@
         }
     };
     
-    // Get selected text
     function getSelectedText() {
         let text = '';
         if (window.getSelection) {
@@ -133,7 +116,34 @@
         return text;
     }
     
-    // Create widget
+    function createButton(text, title) {
+        const btn = document.createElement('button');
+        btn.textContent = text;
+        btn.title = title;
+        btn.style.cssText = `
+            background: rgba(102,126,234,0.1);
+            border: 1px solid rgba(102,126,234,0.2);
+            color: #a0aec0;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-family: inherit;
+        `;
+        btn.onmouseenter = () => {
+            btn.style.background = 'rgba(102,126,234,0.2)';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#667eea';
+        };
+        btn.onmouseleave = () => {
+            btn.style.background = 'rgba(102,126,234,0.1)';
+            btn.style.color = '#a0aec0';
+            btn.style.borderColor = 'rgba(102,126,234,0.2)';
+        };
+        return btn;
+    }
+    
     function createWidget() {
         if (document.getElementById('sdp-widget')) return;
         
@@ -297,8 +307,8 @@
         const actions = document.createElement('div');
         actions.style.cssText = 'display: flex; gap: 8px;';
         
-        const clearBtn = this.createButton('🗑️', 'Clear chat');
-        const closeBtn = this.createButton('✕', 'Close');
+        const clearBtn = createButton('🗑️', 'Clear chat');
+        const closeBtn = createButton('✕', 'Close');
         
         clearBtn.onclick = () => clearChat();
         closeBtn.onclick = () => { widget.style.display = 'none'; };
@@ -386,7 +396,7 @@
             input.style.background = 'rgba(0,0,0,0.3)';
         };
         
-        const sendBtn = this.createButton('➤ Send', 'Send message');
+        const sendBtn = createButton('➤ Send', 'Send message');
         sendBtn.style.cssText = `
             padding: 0 24px;
             border-radius: 16px;
@@ -433,34 +443,6 @@
         if (!sessionId) {
             sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             localStorage.setItem('sdp_session', sessionId);
-        }
-        
-        function createButton(text, title) {
-            const btn = document.createElement('button');
-            btn.textContent = text;
-            btn.title = title;
-            btn.style.cssText = `
-                background: rgba(102,126,234,0.1);
-                border: 1px solid rgba(102,126,234,0.2);
-                color: #a0aec0;
-                cursor: pointer;
-                padding: 8px 12px;
-                border-radius: 12px;
-                font-size: 14px;
-                transition: all 0.2s;
-                font-family: inherit;
-            `;
-            btn.onmouseenter = () => {
-                btn.style.background = 'rgba(102,126,234,0.2)';
-                btn.style.color = '#fff';
-                btn.style.borderColor = '#667eea';
-            };
-            btn.onmouseleave = () => {
-                btn.style.background = 'rgba(102,126,234,0.1)';
-                btn.style.color = '#a0aec0';
-                btn.style.borderColor = 'rgba(102,126,234,0.2)';
-            };
-            return btn;
         }
         
         function addMessage(text, role) {
