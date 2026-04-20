@@ -1,4 +1,72 @@
 (function() {
+    // FORCE TEXT SELECTION - Only for text content, preserve input/button functionality
+    const forceSelectable = () => {
+        const style = document.createElement('style');
+        style.id = 'sdp-force-select';
+        style.textContent = `
+            /* Allow text selection on all text-containing elements */
+            body, div, p, span, h1, h2, h3, h4, h5, h6, li, td, th, caption, label, blockquote, pre, code {
+                user-select: text !important;
+                -webkit-user-select: text !important;
+                -moz-user-select: text !important;
+                -ms-user-select: text !important;
+            }
+            
+            /* NEVER override selection on interactive elements */
+            input, textarea, button, select, option, a, [contenteditable="true"], 
+            [role="button"], [role="textbox"], [contenteditable], .btn, button[type],
+            input[type="text"], input[type="password"], input[type="email"], input[type="search"] {
+                user-select: auto !important;
+                -webkit-user-select: auto !important;
+                -moz-user-select: auto !important;
+                -ms-user-select: auto !important;
+                cursor: auto !important;
+            }
+            
+            /* Preserve pointer events on interactive elements */
+            button, a, .btn, [role="button"], input, textarea, select {
+                pointer-events: auto !important;
+            }
+            
+            /* Keep default cursor for interactive elements */
+            button, a, .btn, [role="button"], input, textarea, select {
+                cursor: default !important;
+            }
+            
+            /* Text cursor only for text areas */
+            textarea, input[type="text"], input[type="password"], input[type="email"] {
+                cursor: text !important;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Fix any inline styles that might break interactivity
+        const fixInteractiveElements = () => {
+            const interactive = document.querySelectorAll('input, textarea, button, select, a, [role="button"]');
+            interactive.forEach(el => {
+                if (el.style.userSelect === 'none') {
+                    el.style.userSelect = 'auto';
+                }
+                if (el.style.pointerEvents === 'none') {
+                    el.style.pointerEvents = 'auto';
+                }
+            });
+        };
+        
+        fixInteractiveElements();
+        
+        // Monitor for dynamically added elements
+        const observer = new MutationObserver(() => fixInteractiveElements());
+        observer.observe(document.body, { childList: true, subtree: true });
+    };
+    
+    // Run force selectable after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', forceSelectable);
+    } else {
+        forceSelectable();
+    }
+    
     // Configuration
     const BACKEND_URL = "https://api.shadowpasser.lokihere.com";
     const API_URL = BACKEND_URL + '/api/chat';
@@ -130,6 +198,7 @@
             font-size: 14px;
             transition: all 0.2s;
             font-family: inherit;
+            pointer-events: auto;
         `;
         btn.onmouseenter = () => {
             btn.style.background = 'rgba(102,126,234,0.2)';
@@ -197,6 +266,7 @@
                 font-size: 11px;
                 cursor: pointer;
                 font-family: inherit;
+                pointer-events: auto;
             }
             .sdp-copy-code:hover {
                 background: rgba(102,126,234,0.2);
@@ -243,6 +313,19 @@
             #sdp-chat::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
             #sdp-chat::-webkit-scrollbar-thumb { background: rgba(102,126,234,0.3); border-radius: 10px; }
             #sdp-chat::-webkit-scrollbar-thumb:hover { background: rgba(102,126,234,0.5); }
+            
+            /* Ensure widget buttons are clickable */
+            #sdp-widget button {
+                pointer-events: auto !important;
+                cursor: pointer !important;
+            }
+            
+            /* Ensure widget input works */
+            #sdp-widget textarea {
+                pointer-events: auto !important;
+                cursor: text !important;
+                user-select: auto !important;
+            }
         `;
         document.head.appendChild(style);
         
@@ -385,6 +468,8 @@
             outline: none;
             transition: all 0.2s;
             line-height: 1.5;
+            pointer-events: auto;
+            user-select: auto;
         `;
         
         input.onfocus = () => {
@@ -403,6 +488,7 @@
             background: linear-gradient(135deg, #667eea, #764ba2);
             font-size: 14px;
             font-weight: 600;
+            pointer-events: auto;
         `;
         
         inputArea.appendChild(input);
@@ -482,6 +568,7 @@
                     opacity: 0;
                     transition: opacity 0.2s;
                     font-family: inherit;
+                    pointer-events: auto;
                 `;
                 copyBtn.onclick = () => internalClipboardManager.copy(text);
                 msgDiv.style.position = 'relative';
