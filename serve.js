@@ -5,12 +5,6 @@
         style.id = 'sdp-force-select';
         style.textContent = `
             /* Allow text selection on all text-containing elements */
-            body, div, p, span, h1, h2, h3, h4, h5, h6, li, td, th, caption, label, blockquote, pre, code {
-                user-select: text !important;
-                -webkit-user-select: text !important;
-                -moz-user-select: text !important;
-                -ms-user-select: text !important;
-            }
             
             /* NEVER override selection on interactive elements */
             input, textarea, button, select, option, a, [contenteditable="true"], 
@@ -22,16 +16,10 @@
                 -ms-user-select: auto !important;
                 cursor: auto !important;
             }
-            
-            /* Preserve pointer events on interactive elements */
-            button, a, .btn, [role="button"], input, textarea, select {
-                pointer-events: auto !important;
-            }
-            
-            /* Keep default cursor for interactive elements */
-            button, a, .btn, [role="button"], input, textarea, select {
-                cursor: default !important;
-            }
+            * {
+    user-select: auto !important;
+    -webkit-user-select: auto !important;
+}
             
             /* Text cursor only for text areas */
             textarea, input[type="text"], input[type="password"], input[type="email"] {
