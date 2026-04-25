@@ -655,7 +655,7 @@
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'l') {
+            if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'h') {
                 e.preventDefault();
                 e.stopPropagation();
                 if (widget.style.display === 'none') {
