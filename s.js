@@ -55,19 +55,102 @@
         forceSelectable();
     }
     
+    // ============ CHAT STORAGE SYSTEM ============
+    const STORAGE_KEY = 'shadowpasser_chat_history';
+    const CHAT_ID_KEY = 'shadowpasser_chat_id';
+    const MAX_HISTORY = 50; // Maximum messages to store per chat
+    
+    // Generate a random chat ID
+    function generateChatId() {
+        return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    // Get or create chat ID
+    function getChatId() {
+        let chatId = localStorage.getItem(CHAT_ID_KEY);
+        if (!chatId) {
+            chatId = generateChatId();
+            localStorage.setItem(CHAT_ID_KEY, chatId);
+        }
+        return chatId;
+    }
+    
+    // Save chat history
+    function saveChatHistory(chatId, messages) {
+        try {
+            const allHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            // Keep only last MAX_HISTORY messages
+            const trimmedMessages = messages.slice(-MAX_HISTORY);
+            allHistory[chatId] = {
+                messages: trimmedMessages,
+                updatedAt: Date.now(),
+                chatId: chatId
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allHistory));
+        } catch (e) {
+            console.error('Failed to save chat history:', e);
+        }
+    }
+    
+    // Load chat history
+    function loadChatHistory(chatId) {
+        try {
+            const allHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            const chatData = allHistory[chatId];
+            if (chatData && chatData.messages) {
+                return chatData.messages;
+            }
+            return [];
+        } catch (e) {
+            console.error('Failed to load chat history:', e);
+            return [];
+        }
+    }
+    
+    // Clear chat history for current chat
+    function clearChatHistory(chatId) {
+        try {
+            const allHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            delete allHistory[chatId];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allHistory));
+        } catch (e) {
+            console.error('Failed to clear chat history:', e);
+        }
+    }
+    
+    // Clean old chats (older than 7 days)
+    function cleanOldChats() {
+        try {
+            const allHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            const now = Date.now();
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            let cleaned = false;
+            
+            for (const [chatId, data] of Object.entries(allHistory)) {
+                if (now - data.updatedAt > sevenDays) {
+                    delete allHistory[chatId];
+                    cleaned = true;
+                }
+            }
+            
+            if (cleaned) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(allHistory));
+                console.log('[✓] Cleaned old chat histories');
+            }
+        } catch (e) {
+            console.error('Failed to clean old chats:', e);
+        }
+    }
+    
+    // ============ CONFIGURATION ============
     // Configuration - Groq API
     const API_URL = "https://api.groq.com/openai/v1/chat/completions";
     
     // ⚠️ GET YOUR API KEY FROM: https://console.groq.com/keys
-    // Replace with your actual Groq API key
-    const API_KEY = "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"; // <-- PASTE YOUR GROQ API KEY HERE
+    const API_KEY = "gsk_YOUR_GROQ_API_KEY_HERE"; // <-- PASTE YOUR GROQ API KEY HERE
     
     // Available Groq models:
-    // - "mixtral-8x7b-32768" (Mixtral 8x7B)
-    // - "llama3-70b-8192" (Llama 3 70B)
-    // - "llama3-8b-8192" (Llama 3 8B)
-    // - "gemma2-9b-it" (Gemma 2 9B)
-    const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+    const DEFAULT_MODEL = "mixtral-8x7b-32768";
     
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? '⌘' : 'Ctrl';
@@ -213,6 +296,9 @@
     function createWidget() {
         if (document.getElementById('sdp-widget')) return;
         
+        // Clean old chats on startup
+        cleanOldChats();
+        
         // Add styles
         const style = document.createElement('style');
         style.textContent = `
@@ -323,6 +409,18 @@
                 cursor: text !important;
                 user-select: auto !important;
             }
+            
+            /* Chat ID display */
+            .sdp-chat-id {
+                font-size: 9px;
+                color: rgba(255,255,255,0.2);
+                font-family: monospace;
+                padding: 2px 8px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 10px;
+                margin-top: 4px;
+                display: inline-block;
+            }
         `;
         document.head.appendChild(style);
         
@@ -359,7 +457,7 @@
         `;
         
         const titleSection = document.createElement('div');
-        titleSection.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+        titleSection.style.cssText = 'display: flex; align-items: center; gap: 12px; flex-wrap: wrap;';
         
         const icon = document.createElement('div');
         icon.innerHTML = '🚀';
@@ -376,23 +474,29 @@
         `;
         
         const titleText = document.createElement('div');
+        const chatId = getChatId();
+        const shortId = chatId.slice(-8);
         titleText.innerHTML = `
             <div style="font-weight: 700; font-size: 18px; color: #fff;">ShadowPasser <span style="font-size: 10px; background: rgba(102,126,234,0.2); padding: 2px 8px; border-radius: 20px; margin-left: 6px;">Groq</span></div>
             <div style="font-size: 11px; color: #a0aec0; margin-top: 4px;">${modKey}+${altKey}+L to toggle • Mixtral 8x7B</div>
+            <div class="sdp-chat-id">ID: ${shortId}</div>
         `;
         
         titleSection.appendChild(icon);
         titleSection.appendChild(titleText);
         
         const actions = document.createElement('div');
-        actions.style.cssText = 'display: flex; gap: 8px;';
+        actions.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap;';
         
+        const newChatBtn = createButton('🔄 New', 'Start new chat');
         const clearBtn = createButton('🗑️', 'Clear chat');
         const closeBtn = createButton('✕', 'Close');
         
+        newChatBtn.onclick = () => startNewChat();
         clearBtn.onclick = () => clearChat();
         closeBtn.onclick = () => { widget.style.display = 'none'; };
         
+        actions.appendChild(newChatBtn);
         actions.appendChild(clearBtn);
         actions.appendChild(closeBtn);
         
@@ -412,8 +516,9 @@
             background: rgba(15,15,26,0.95);
         `;
         
-        // Welcome message
+        // Welcome message (will be replaced if history exists)
         const welcome = document.createElement('div');
+        welcome.id = 'sdp-welcome';
         welcome.style.cssText = `
             background: linear-gradient(135deg, rgba(102,126,234,0.1), rgba(118,75,162,0.1));
             border-radius: 20px;
@@ -433,10 +538,13 @@
                 <span>${modKey}+${altKey}+N (Paste)</span>
             </div>
             <div style="margin-top: 12px; font-size: 11px; color: #a0aec0;">
-                💡 Internal clipboard: Copies code/text without affecting system clipboard
+                💡 Chat history is saved automatically
             </div>
             <div style="margin-top: 8px; font-size: 10px; color: #10a37f;">
                 ✅ Model: mixtral-8x7b-32768
+            </div>
+            <div style="margin-top: 8px; font-size: 10px; color: rgba(255,255,255,0.2);">
+                Chat ID: ${chatId}
             </div>
         `;
         chat.appendChild(welcome);
@@ -504,7 +612,7 @@
         let dragOffsetX, dragOffsetY;
         
         header.addEventListener('mousedown', (e) => {
-            if (e.target === clearBtn || e.target === closeBtn) return;
+            if (e.target === clearBtn || e.target === closeBtn || e.target === newChatBtn) return;
             isDragging = true;
             dragOffsetX = e.clientX - widget.offsetLeft;
             dragOffsetY = e.clientY - widget.offsetTop;
@@ -524,17 +632,34 @@
             widget.style.cursor = '';
         });
         
-        // Chat logic
-        let sessionId = localStorage.getItem('sdp_session');
-        if (!sessionId) {
-            sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('sdp_session', sessionId);
+        // ============ CHAT LOGIC WITH PERSISTENCE ============
+        let currentChatId = getChatId();
+        let messageHistory = loadChatHistory(currentChatId);
+        
+        function renderMessages() {
+            // Remove all messages except welcome
+            while (chat.children.length > 1) {
+                chat.removeChild(chat.lastChild);
+            }
+            
+            // Render saved messages
+            messageHistory.forEach(msg => {
+                const msgDiv = createMessageElement(msg.content, msg.role);
+                chat.appendChild(msgDiv);
+            });
+            
+            // Update welcome message if there are messages
+            const welcomeEl = document.getElementById('sdp-welcome');
+            if (welcomeEl && messageHistory.length > 0) {
+                welcomeEl.style.display = 'none';
+            } else if (welcomeEl) {
+                welcomeEl.style.display = 'block';
+            }
+            
+            chat.scrollTop = chat.scrollHeight;
         }
         
-        // Message history for context
-        let messageHistory = [];
-        
-        function addMessage(text, role) {
+        function createMessageElement(text, role) {
             const msgDiv = document.createElement('div');
             msgDiv.style.cssText = `
                 max-width: 85%;
@@ -550,8 +675,9 @@
             `;
             
             if (role === 'assistant') {
+                const timestamp = new Date().toLocaleTimeString();
                 msgDiv.innerHTML = `
-                    <div style="margin-bottom: 8px; font-size: 11px; font-weight: 600; color: #667eea;">✦ Groq AI</div>
+                    <div style="margin-bottom: 8px; font-size: 11px; font-weight: 600; color: #667eea;">✦ Groq AI <span style="color: rgba(255,255,255,0.2); font-weight: normal; font-size: 9px;">${timestamp}</span></div>
                     <div style="font-size: 14px; line-height: 1.6;">${markdown.render(text)}</div>
                 `;
                 
@@ -582,11 +708,25 @@
                 msgDiv.innerHTML = `<div style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5;">${markdown.escapeHtml(text)}</div>`;
             }
             
+            return msgDiv;
+        }
+        
+        function addMessage(text, role) {
+            const msgDiv = createMessageElement(text, role);
             chat.appendChild(msgDiv);
             chat.scrollTop = chat.scrollHeight;
             
             // Store in history
             messageHistory.push({ role, content: text });
+            
+            // Save to localStorage
+            saveChatHistory(currentChatId, messageHistory);
+            
+            // Hide welcome message if there are messages
+            const welcomeEl = document.getElementById('sdp-welcome');
+            if (welcomeEl) {
+                welcomeEl.style.display = 'none';
+            }
         }
         
         function showTyping() {
@@ -622,6 +762,94 @@
             if (typing) typing.remove();
         }
         
+        function startNewChat() {
+            // Generate new chat ID
+            currentChatId = generateChatId();
+            localStorage.setItem(CHAT_ID_KEY, currentChatId);
+            
+            // Clear message history
+            messageHistory = [];
+            
+            // Clear the chat display
+            while (chat.children.length > 1) {
+                chat.removeChild(chat.lastChild);
+            }
+            
+            // Show welcome message
+            const welcomeEl = document.getElementById('sdp-welcome');
+            if (welcomeEl) {
+                welcomeEl.style.display = 'block';
+                const shortId = currentChatId.slice(-8);
+                welcomeEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 12px;">🚀</div>
+                    <div style="font-weight: 700; font-size: 20px; margin-bottom: 8px; color: #fff;">New Chat Started</div>
+                    <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Powered by Groq • Mixtral 8x7B</div>
+                    <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea;">
+                        <span>${modKey}+${altKey}+L</span>
+                        <span>•</span>
+                        <span>${modKey}+${altKey}+M (Copy)</span>
+                        <span>•</span>
+                        <span>${modKey}+${altKey}+N (Paste)</span>
+                    </div>
+                    <div style="margin-top: 12px; font-size: 11px; color: #a0aec0;">
+                        💡 Chat history is saved automatically
+                    </div>
+                    <div style="margin-top: 8px; font-size: 10px; color: #10a37f;">
+                        ✅ Chat ID: ${shortId}
+                    </div>
+                `;
+            }
+            
+            // Update title
+            const shortId = currentChatId.slice(-8);
+            const titleDiv = titleSection.querySelector('.sdp-chat-id');
+            if (titleDiv) {
+                titleDiv.textContent = `ID: ${shortId}`;
+            }
+            
+            internalClipboardManager.showNotification('✓ New chat started', '#10a37f');
+            input.focus();
+        }
+        
+        async function clearChat() {
+            // Clear message history
+            messageHistory = [];
+            clearChatHistory(currentChatId);
+            
+            // Clear the chat display
+            while (chat.children.length > 1) {
+                chat.removeChild(chat.lastChild);
+            }
+            
+            // Show welcome message
+            const welcomeEl = document.getElementById('sdp-welcome');
+            if (welcomeEl) {
+                welcomeEl.style.display = 'block';
+                const shortId = currentChatId.slice(-8);
+                welcomeEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 12px;">🚀</div>
+                    <div style="font-weight: 700; font-size: 20px; margin-bottom: 8px; color: #fff;">Chat Cleared</div>
+                    <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Start a new conversation</div>
+                    <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea;">
+                        <span>${modKey}+${altKey}+L</span>
+                        <span>•</span>
+                        <span>${modKey}+${altKey}+M (Copy)</span>
+                        <span>•</span>
+                        <span>${modKey}+${altKey}+N (Paste)</span>
+                    </div>
+                    <div style="margin-top: 12px; font-size: 11px; color: #a0aec0;">
+                        💡 Chat history is saved automatically
+                    </div>
+                    <div style="margin-top: 8px; font-size: 10px; color: #10a37f;">
+                        ✅ Chat ID: ${shortId}
+                    </div>
+                `;
+            }
+            
+            internalClipboardManager.showNotification('✓ Chat cleared', '#10a37f');
+            input.focus();
+        }
+        
         async function sendMessage() {
             const msg = input.value.trim();
             if (!msg) return;
@@ -641,9 +869,11 @@
             
             try {
                 // Prepare messages for Groq API (OpenAI-compatible)
+                // Use message history for context (last 20 messages)
+                const contextMessages = messageHistory.slice(-20);
                 const messages = [
-                    { role: 'system', content: 'You are ShadowPasser AI, a helpful assistant powered by Groq.' },
-                    ...messageHistory.slice(-10) // Keep last 10 messages for context
+                    { role: 'system', content: 'You are ShadowPasser AI, a helpful assistant powered by Groq. You have a conversation history and should maintain context.' },
+                    ...contextMessages
                 ];
                 
                 const response = await fetch(API_URL, {
@@ -692,13 +922,8 @@
             }
         }
         
-        async function clearChat() {
-            while (chat.children.length > 1) {
-                chat.removeChild(chat.lastChild);
-            }
-            messageHistory = []; // Clear history
-            internalClipboardManager.showNotification('✓ Chat cleared', '#10a37f');
-        }
+        // Load existing messages
+        renderMessages();
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
