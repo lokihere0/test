@@ -871,3 +871,52 @@
         createWidget();
     }
 })();
+
+
+(function makeNavigatorLookLikeChrome() {
+  const chromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  
+  Object.defineProperty(navigator, 'userAgent', { get: () => chromeUA, configurable: true });
+  Object.defineProperty(navigator, 'vendor', { get: () => 'Google Inc.', configurable: true });
+  Object.defineProperty(navigator, 'platform', { get: () => 'Win32', configurable: true });
+  Object.defineProperty(navigator, 'appVersion', { get: () => '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', configurable: true });
+  Object.defineProperty(navigator, 'appName', { get: () => 'Netscape', configurable: true });
+  Object.defineProperty(navigator, 'product', { get: () => 'Gecko', configurable: true });
+  Object.defineProperty(navigator, 'productSub', { get: () => '20030107', configurable: true });
+  Object.defineProperty(navigator, 'vendorSub', { get: () => '', configurable: true });
+  Object.defineProperty(navigator, 'buildID', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'brave', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true });
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8, configurable: true });
+  Object.defineProperty(navigator, 'deviceMemory', { get: () => 8, configurable: true });
+  Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0, configurable: true });
+  Object.defineProperty(navigator, 'pointerEnabled', { get: () => true, configurable: true });
+  Object.defineProperty(navigator, 'msMaxTouchPoints', { get: () => 0, configurable: true });
+  Object.defineProperty(navigator, 'doNotTrack', { get: () => null, configurable: true });
+  Object.defineProperty(navigator, 'globalPrivacyControl', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'], configurable: true });
+  Object.defineProperty(navigator, 'language', { get: () => 'en-US', configurable: true });
+  Object.defineProperty(navigator, 'userLanguage', { get: () => 'en-US', configurable: true });
+  Object.defineProperty(navigator, 'browserLanguage', { get: () => 'en-US', configurable: true });
+  Object.defineProperty(navigator, 'systemLanguage', { get: () => 'en-US', configurable: true });
+  Object.defineProperty(navigator, 'cookieEnabled', { get: () => true, configurable: true });
+  Object.defineProperty(navigator, 'onLine', { get: () => true, configurable: true });
+  Object.defineProperty(navigator, 'connection', { get: () => ({ effectiveType: '4g', rtt: 50, downlink: 10, saveData: false }), configurable: true });
+  Object.defineProperty(navigator, 'mediaDevices', { get: () => ({ enumerateDevices: () => Promise.resolve([]) }), configurable: true });
+  Object.defineProperty(navigator, 'permissions', { get: () => ({ query: () => Promise.resolve({ state: 'prompt' }) }), configurable: true });
+  Object.defineProperty(navigator, 'geolocation', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'bluetooth', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'usb', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'serial', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'hid', { get: () => undefined, configurable: true });
+  Object.defineProperty(navigator, 'virtualKeyboard', { get: () => ({ boundingRect: () => ({ x: 0, y: 0, width: 0, height: 0 }) }), configurable: true });
+  Object.defineProperty(navigator, 'userAgentData', { get: () => ({ brands: [{ brand: 'Chromium', version: '120' }, { brand: 'Google Chrome', version: '120' }, { brand: 'Not?A_Brand', version: '24' }], mobile: false, platform: 'Windows', getHighEntropyValues: () => Promise.resolve({ architecture: 'x86', bitness: '64', model: '', platform: 'Windows', platformVersion: '10.0', uaFullVersion: '120.0.0.0' }) }), configurable: true });
+  
+  if (window.chrome === undefined) {
+    window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}), app: {}, webstore: {} };
+  }
+  
+  if (window.clientInformation) {
+    Object.defineProperty(window, 'clientInformation', { get: () => navigator, configurable: true });
+  }
+})();
