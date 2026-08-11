@@ -33,28 +33,109 @@
         setTimeout(() => notif.remove(), 2000);
     }
     
+    // ============ MULTI-LAYER TEXT SELECTION ============
     function getSelectedText() {
         let text = '';
+        let debug = [];
         
-        // Get from window selection
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim()) {
-            text = selection.toString().trim();
-        }
-        
-        // If nothing, try from input/textarea
-        if (!text && document.activeElement) {
-            const el = document.activeElement;
-            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-                const start = el.selectionStart || 0;
-                const end = el.selectionEnd || 0;
-                if (start !== end) {
-                    text = el.value.substring(start, end);
+        // LAYER 1: Try window.getSelection()
+        try {
+            const selection = window.getSelection();
+            if (selection) {
+                const selected = selection.toString();
+                if (selected && selected.trim()) {
+                    text = selected.trim();
+                    debug.push('Layer 1 (window.getSelection): ' + text.substring(0, 50));
+                    console.log('[Copy] Layer 1 success:', text.substring(0, 50) + '...');
+                    return text;
                 }
             }
+        } catch(e) {
+            debug.push('Layer 1 error: ' + e.message);
         }
         
-        return text;
+        // LAYER 2: Try document.activeElement (input/textarea)
+        try {
+            const el = document.activeElement;
+            if (el) {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    const start = el.selectionStart || 0;
+                    const end = el.selectionEnd || 0;
+                    if (start !== end) {
+                        text = el.value.substring(start, end);
+                        if (text && text.trim()) {
+                            text = text.trim();
+                            debug.push('Layer 2 (input/textarea): ' + text.substring(0, 50));
+                            console.log('[Copy] Layer 2 success:', text.substring(0, 50) + '...');
+                            return text;
+                        }
+                    }
+                }
+                
+                // LAYER 3: Try contenteditable
+                if (el.isContentEditable) {
+                    const selection = window.getSelection();
+                    if (selection && selection.toString()) {
+                        text = selection.toString().trim();
+                        if (text) {
+                            debug.push('Layer 3 (contenteditable): ' + text.substring(0, 50));
+                            console.log('[Copy] Layer 3 success:', text.substring(0, 50) + '...');
+                            return text;
+                        }
+                    }
+                }
+            }
+        } catch(e) {
+            debug.push('Layer 2/3 error: ' + e.message);
+        }
+        
+        // LAYER 4: Try document selection from iframe
+        try {
+            const iframes = document.querySelectorAll('iframe');
+            for (let iframe of iframes) {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (iframeDoc) {
+                        const selection = iframeDoc.getSelection();
+                        if (selection && selection.toString()) {
+                            text = selection.toString().trim();
+                            if (text) {
+                                debug.push('Layer 4 (iframe): ' + text.substring(0, 50));
+                                console.log('[Copy] Layer 4 success:', text.substring(0, 50) + '...');
+                                return text;
+                            }
+                        }
+                    }
+                } catch(e) {
+                    // Cross-origin iframe, skip
+                }
+            }
+        } catch(e) {
+            debug.push('Layer 4 error: ' + e.message);
+        }
+        
+        // LAYER 5: Try shadow DOM
+        try {
+            const allElements = document.querySelectorAll('*');
+            for (let el of allElements) {
+                if (el.shadowRoot) {
+                    const selection = el.shadowRoot.getSelection ? el.shadowRoot.getSelection() : null;
+                    if (selection && selection.toString()) {
+                        text = selection.toString().trim();
+                        if (text) {
+                            debug.push('Layer 5 (shadow DOM): ' + text.substring(0, 50));
+                            console.log('[Copy] Layer 5 success:', text.substring(0, 50) + '...');
+                            return text;
+                        }
+                    }
+                }
+            }
+        } catch(e) {
+            debug.push('Layer 5 error: ' + e.message);
+        }
+        
+        console.log('[Copy] All layers failed. Debug:', debug);
+        return '';
     }
     
     // ============ MARKDOWN RENDERER ============
@@ -276,7 +357,7 @@
         const titleText = document.createElement('div');
         titleText.innerHTML = `
             <div style="font-weight: 700; font-size: 18px; color: #fff;">ShadowPasser <span style="font-size: 10px; background: rgba(102,126,234,0.2); padding: 2px 8px; border-radius: 20px; margin-left: 6px;">Groq</span></div>
-            <div style="font-size: 11px; color: #a0aec0; margin-top: 4px;">${modKey}+${altKey}+L to toggle • Llama 3.3 70B</div>
+            <div style="font-size: 11px; color: #a0aec0; margin-top: 4px;">${modKey}+${altKey}+H to toggle • Llama 3.3 70B</div>
         `;
         
         titleSection.appendChild(icon);
@@ -333,7 +414,7 @@
             <div style="font-weight: 700; font-size: 20px; margin-bottom: 8px; color: #fff;">ShadowPasser AI</div>
             <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Powered by Groq • Llama 3.3 70B</div>
             <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea;">
-                <span>${modKey}+${altKey}+L (Toggle)</span>
+                <span>${modKey}+${altKey}+H (Toggle)</span>
                 <span>•</span>
                 <span>${modKey}+${altKey}+M (Copy)</span>
                 <span>•</span>
@@ -565,8 +646,8 @@
             const isCtrlOrCmd = e.ctrlKey || e.metaKey;
             const isAlt = e.altKey;
             
-            // Toggle: Ctrl+Alt+L
-            if (isCtrlOrCmd && isAlt && (e.key === 'l' || e.key === 'L')) {
+            // Toggle: Ctrl+Alt+H
+            if (isCtrlOrCmd && isAlt && (e.key === 'h' || e.key === 'H')) {
                 e.preventDefault();
                 e.stopPropagation();
                 if (widget.style.display === 'none') {
@@ -582,13 +663,17 @@
             if (isCtrlOrCmd && isAlt && (e.key === 'm' || e.key === 'M')) {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('[Copy] Shortcut triggered');
                 const selectedText = getSelectedText();
+                console.log('[Copy] Selected text length:', selectedText ? selectedText.length : 0);
                 if (selectedText) {
                     internalClipboard = selectedText;
                     clipboardTimestamp = Date.now();
                     showNotification('✓ Copied to internal clipboard', '#10a37f');
+                    console.log('[Copy] Successfully copied:', selectedText.substring(0, 50) + '...');
                 } else {
                     showNotification('✗ No text selected', '#ef4444');
+                    console.log('[Copy] No text selected');
                 }
                 return;
             }
@@ -597,6 +682,7 @@
             if (isCtrlOrCmd && isAlt && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('[Paste] Shortcut triggered');
                 if (internalClipboard) {
                     const activeEl = document.activeElement;
                     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
@@ -606,9 +692,11 @@
                         activeEl.selectionStart = activeEl.selectionEnd = start + internalClipboard.length;
                         activeEl.dispatchEvent(new Event('input', { bubbles: true }));
                         showNotification('✓ Pasted from internal clipboard', '#10a37f');
+                        console.log('[Paste] Pasted successfully');
                     }
                 } else {
                     showNotification('✗ Internal clipboard is empty', '#ef4444');
+                    console.log('[Paste] Clipboard empty');
                 }
                 return;
             }
