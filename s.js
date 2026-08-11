@@ -60,14 +60,14 @@
     
     // ⚠️ GET YOUR API KEY FROM: https://console.groq.com/keys
     // Replace with your actual Groq API key
-    const API_KEY = "gsk_YOUR_GROQ_API_KEY_HERE"; // <-- PASTE YOUR GROQ API KEY HERE
+    const API_KEY = "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"; // <-- PASTE YOUR GROQ API KEY HERE
     
     // Available Groq models:
     // - "mixtral-8x7b-32768" (Mixtral 8x7B)
     // - "llama3-70b-8192" (Llama 3 70B)
     // - "llama3-8b-8192" (Llama 3 8B)
     // - "gemma2-9b-it" (Gemma 2 9B)
-    const DEFAULT_MODEL = "mixtral-8x7b-32768";
+    const DEFAULT_MODEL = "llama-3.3-70b-versatile";
     
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? '⌘' : 'Ctrl';
