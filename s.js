@@ -2,7 +2,7 @@
     // ============ CONFIGURATION ============
     const API_KEY = "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";
     const API_URL = "https://api.groq.com/openai/v1/chat/completions";
-    const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+    const DEFAULT_MODEL = "openai/gpt-oss-120b";
     
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? '⌘' : 'Ctrl';
