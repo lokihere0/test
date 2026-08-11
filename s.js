@@ -162,6 +162,7 @@
     
     const internalClipboardManager = {
         copy(text) {
+            console.log('[Clipboard] Copy called with:', text);
             if (!text) {
                 this.showNotification('✗ Nothing to copy', '#ef4444');
                 return false;
@@ -169,10 +170,12 @@
             internalClipboard = text;
             clipboardTimestamp = Date.now();
             this.showNotification('✓ Copied to internal clipboard', '#10a37f');
+            console.log('[Clipboard] Copied:', text.substring(0, 50) + '...');
             return true;
         },
         
         paste() {
+            console.log('[Clipboard] Paste called, clipboard has:', internalClipboard ? 'yes' : 'no');
             if (!internalClipboard) {
                 this.showNotification('✗ Internal clipboard is empty', '#ef4444');
                 return null;
@@ -253,14 +256,30 @@
     
     function getSelectedText() {
         let text = '';
+        
+        // Try to get selected text from the page
         if (window.getSelection) {
-            text = window.getSelection().toString();
+            const selection = window.getSelection();
+            if (selection && selection.toString()) {
+                text = selection.toString().trim();
+                console.log('[Selection] Got from window.getSelection:', text.substring(0, 50) + '...');
+            }
         }
-        if (!text && document.activeElement && 
-            (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        
+        // If no text, check if it's from input/textarea
+        if (!text && document.activeElement) {
             const el = document.activeElement;
-            text = el.value.substring(el.selectionStart || 0, el.selectionEnd || 0);
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                const start = el.selectionStart || 0;
+                const end = el.selectionEnd || 0;
+                if (start !== end) {
+                    text = el.value.substring(start, end);
+                    console.log('[Selection] Got from input/textarea:', text.substring(0, 50) + '...');
+                }
+            }
         }
+        
+        console.log('[Selection] Final text length:', text.length);
         return text;
     }
     
@@ -925,33 +944,47 @@
         // Load existing messages
         renderMessages();
         
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'h') {
+        // ============ KEYBOARD SHORTCUTS (FIXED) ============
+        function handleKeyboardShortcuts(e) {
+            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+            const isAlt = e.altKey;
+            
+            // Debug logging
+            console.log('[Shortcut] Key:', e.key, 'Ctrl/Cmd:', isCtrlOrCmd, 'Alt:', isAlt);
+            
+            // Toggle widget: Ctrl+Alt+L
+            if (isCtrlOrCmd && isAlt && (e.key === 'l' || e.key === 'L')) {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('[Shortcut] Toggle widget');
                 if (widget.style.display === 'none') {
                     widget.style.display = 'flex';
                     input.focus();
                 } else {
                     widget.style.display = 'none';
                 }
+                return;
             }
             
-            if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'm') {
+            // Copy to internal clipboard: Ctrl+Alt+M
+            if (isCtrlOrCmd && isAlt && (e.key === 'm' || e.key === 'M')) {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('[Shortcut] Copy triggered');
                 const selectedText = getSelectedText();
                 if (selectedText) {
                     internalClipboardManager.copy(selectedText);
                 } else {
                     internalClipboardManager.showNotification('✗ No text selected', '#ef4444');
                 }
+                return;
             }
             
-            if ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'n') {
+            // Paste from internal clipboard: Ctrl+Alt+N
+            if (isCtrlOrCmd && isAlt && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('[Shortcut] Paste triggered');
                 const pastedText = internalClipboardManager.paste();
                 if (pastedText) {
                     const activeEl = document.activeElement;
@@ -964,12 +997,24 @@
                     } else if (activeEl && activeEl.isContentEditable) {
                         document.execCommand('insertText', false, pastedText);
                     } else {
-                        input.value = input.value.substring(0, input.selectionStart) + pastedText + input.value.substring(input.selectionEnd);
+                        // Fallback: try to paste into the chat input
+                        if (input) {
+                            const start = input.selectionStart || 0;
+                            const end = input.selectionEnd || 0;
+                            input.value = input.value.substring(0, start) + pastedText + input.value.substring(end);
+                            input.selectionStart = input.selectionEnd = start + pastedText.length;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
                     }
                 }
+                return;
             }
-        });
+        }
         
+        // Add the keyboard shortcut listener
+        document.addEventListener('keydown', handleKeyboardShortcuts);
+        
+        // Also handle Enter key for sending messages
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
