@@ -147,10 +147,10 @@
     const API_URL = "https://api.groq.com/openai/v1/chat/completions";
     
     // ⚠️ GET YOUR API KEY FROM: https://console.groq.com/keys
-    const API_KEY = "gsk_YOUR_GROQ_API_KEY_HERE"; // <-- PASTE YOUR GROQ API KEY HERE
+    const API_KEY = "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"; // <-- PASTE YOUR GROQ API KEY HERE
     
     // Available Groq models:
-    const DEFAULT_MODEL = "mixtral-8x7b-32768";
+    const DEFAULT_MODEL = "llama-3.3-70b-versatile";
     
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? '⌘' : 'Ctrl';
