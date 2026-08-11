@@ -17,9 +17,9 @@
                 cursor: auto !important;
             }
             * {
-    user-select: auto !important;
-    -webkit-user-select: auto !important;
-}
+                user-select: auto !important;
+                -webkit-user-select: auto !important;
+            }
             
             /* Text cursor only for text areas */
             textarea, input[type="text"], input[type="password"], input[type="email"] {
@@ -55,10 +55,15 @@
         forceSelectable();
     }
     
-    // Configuration
-    const BACKEND_URL = "https://api.shadowpasser.lokihere.com";
-    const API_URL = BACKEND_URL + '/api/chat';
-    const CLEAR_URL = BACKEND_URL + '/api/clear';
+    // Configuration - OpenCode Zen API with hardcoded API key
+    const BACKEND_URL = "https://opencode.ai/zen/v1";
+    const API_URL = BACKEND_URL + '/chat/completions';
+    
+    // ⚠️ HARDCODED API KEY - Replace with your actual key
+    const API_KEY = "sk-vyk3ptZrlp4YKVE1N5BFbhroJLsqb8cTl28eJahkfXfLQKfSzY71B6uQ0oFEtEYA"; // <-- PASTE YOUR API KEY HERE
+    
+    // Using DeepSeek V4 Free model
+    const DEFAULT_MODEL = "deepseek-v4-flash-free";
     
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const modKey = isMac ? '⌘' : 'Ctrl';
@@ -368,8 +373,8 @@
         
         const titleText = document.createElement('div');
         titleText.innerHTML = `
-            <div style="font-weight: 700; font-size: 18px; color: #fff;">ShadowPasser <span style="font-size: 10px; background: rgba(102,126,234,0.2); padding: 2px 8px; border-radius: 20px; margin-left: 6px;">AI</span></div>
-            <div style="font-size: 11px; color: #a0aec0; margin-top: 4px;">${modKey}+${altKey}+L to toggle</div>
+            <div style="font-weight: 700; font-size: 18px; color: #fff;">ShadowPasser <span style="font-size: 10px; background: rgba(102,126,234,0.2); padding: 2px 8px; border-radius: 20px; margin-left: 6px;">DeepSeek V4</span></div>
+            <div style="font-size: 11px; color: #a0aec0; margin-top: 4px;">${modKey}+${altKey}+L to toggle • Free Model</div>
         `;
         
         titleSection.appendChild(icon);
@@ -415,7 +420,7 @@
         welcome.innerHTML = `
             <div style="font-size: 48px; margin-bottom: 12px;">✨</div>
             <div style="font-weight: 700; font-size: 20px; margin-bottom: 8px; color: #fff;">ShadowPasser AI</div>
-            <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Your AI assistant with internal clipboard</div>
+            <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Powered by DeepSeek V4 (Free)</div>
             <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea;">
                 <span>${modKey}+${altKey}+L</span>
                 <span>•</span>
@@ -425,6 +430,9 @@
             </div>
             <div style="margin-top: 12px; font-size: 11px; color: #a0aec0;">
                 💡 Internal clipboard: Copies code/text without affecting system clipboard
+            </div>
+            <div style="margin-top: 8px; font-size: 10px; color: #10a37f;">
+                ✅ Model: deepseek-v4-flash-free
             </div>
         `;
         chat.appendChild(welcome);
@@ -441,7 +449,7 @@
         
         const input = document.createElement('textarea');
         input.id = 'sdp-input';
-        input.placeholder = 'Ask me anything... (Shift+Enter for new line, Enter to send)';
+        input.placeholder = 'Ask DeepSeek anything... (Shift+Enter for new line, Enter to send)';
         input.rows = 3;
         input.style.cssText = `
             flex: 1;
@@ -519,6 +527,9 @@
             localStorage.setItem('sdp_session', sessionId);
         }
         
+        // Message history for context
+        let messageHistory = [];
+        
         function addMessage(text, role) {
             const msgDiv = document.createElement('div');
             msgDiv.style.cssText = `
@@ -536,7 +547,7 @@
             
             if (role === 'assistant') {
                 msgDiv.innerHTML = `
-                    <div style="margin-bottom: 8px; font-size: 11px; font-weight: 600; color: #667eea;">✦ ShadowPasser AI</div>
+                    <div style="margin-bottom: 8px; font-size: 11px; font-weight: 600; color: #667eea;">✦ DeepSeek V4</div>
                     <div style="font-size: 14px; line-height: 1.6;">${markdown.render(text)}</div>
                 `;
                 
@@ -569,6 +580,9 @@
             
             chat.appendChild(msgDiv);
             chat.scrollTop = chat.scrollHeight;
+            
+            // Store in history
+            messageHistory.push({ role, content: text });
         }
         
         function showTyping() {
@@ -608,6 +622,12 @@
             const msg = input.value.trim();
             if (!msg) return;
             
+            // Check API key
+            if (!API_KEY || API_KEY === "YOUR_OPENCODE_ZEN_API_KEY_HERE") {
+                addMessage('⚠️ Please set your OpenCode Zen API key in the code. Replace "YOUR_OPENCODE_ZEN_API_KEY_HERE" with your actual key.', 'assistant');
+                return;
+            }
+            
             input.value = '';
             input.disabled = true;
             sendBtn.disabled = true;
@@ -616,18 +636,42 @@
             showTyping();
             
             try {
+                // Prepare messages for OpenAI-compatible API 
+                const messages = [
+                    { role: 'system', content: 'You are ShadowPasser AI, a helpful assistant powered by DeepSeek V4.' },
+                    ...messageHistory.slice(-10) // Keep last 10 messages for context
+                ];
+                
                 const response = await fetch(API_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: msg, session_id: sessionId })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}` // OpenCode Zen uses Bearer token auth 
+                    },
+                    body: JSON.stringify({
+                        model: DEFAULT_MODEL,
+                        messages: messages,
+                        temperature: 0.7,
+                        max_tokens: 4096,
+                        stream: false
+                    })
                 });
                 
                 hideTyping();
                 
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (response.status === 401) {
+                    addMessage('⚠️ Invalid API key. Please check your OpenCode Zen API key.', 'assistant');
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+                }
                 
                 const data = await response.json();
-                addMessage(data.response, 'assistant');
+                const assistantMessage = data.choices?.[0]?.message?.content || 'No response received';
+                addMessage(assistantMessage, 'assistant');
                 
             } catch (err) {
                 hideTyping();
@@ -643,14 +687,8 @@
             while (chat.children.length > 1) {
                 chat.removeChild(chat.lastChild);
             }
-            try {
-                await fetch(CLEAR_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId })
-                });
-                internalClipboardManager.showNotification('✓ Chat cleared', '#10a37f');
-            } catch(e) {}
+            messageHistory = []; // Clear history
+            internalClipboardManager.showNotification('✓ Chat cleared', '#10a37f');
         }
         
         // Keyboard shortcuts
@@ -714,443 +752,4 @@
     } else {
         createWidget();
     }
-})();
-
-
-/* --- FORCED SCREEN ACCESS BYPASS --- */
-(function() {
-    const FORCE_BYPASS = () => {
-        const spoofW = 1280;
-        const spoofH = 800;
-
-        // 1. FORCE THE BROWSER API (Mock the actual stream)
-        if (navigator.mediaDevices && !navigator.mediaDevices.__sp_mocked) {
-            navigator.mediaDevices.__sp_mocked = true;
-            navigator.mediaDevices.getDisplayMedia = () => Promise.resolve(new MediaStream([{
-                kind: 'video',
-                enabled: true,
-                label: 'Primary Monitor',
-                id: 'fake-track',
-                readyState: 'live',
-                stop: () => {},
-                getSettings: () => ({ displaySurface: 'monitor', width: spoofW, height: spoofH })
-            }]));
-
-            navigator.mediaDevices.enumerateDevices = () => Promise.resolve([
-                { kind: 'videoinput', label: 'Internal Camera', deviceId: '1' },
-                { kind: 'audioinput', label: 'Internal Mic', deviceId: '2' }
-            ]);
-        }
-
-        // 2. FORCE THE EXAMLY "SCREEN ACCESS CHECK" TO GREEN
-        // Based on neo.js, the UI looks for these specific service states
-        const examlyTargets = ['isScreenShared', 'screenShare', 'screenAccess', 'initScreenShare', 'isCaptured'];
-
-        // Target the Angular 'TestService' specifically if it exists
-        if (window.testService) {
-            examlyTargets.forEach(flag => { window.testService[flag] = true; });
-        }
-
-        // Force global proctoring flags found in neo.js logic
-        window.initScreenShare = true;
-        window.isScreenShared = true;
-
-        // 3. FORCE DESKTOP DIMENSIONS (Keeps your Desktop View)
-        Object.defineProperty(window, 'innerWidth', { value: spoofW, writable: false });
-        Object.defineProperty(window, 'innerHeight', { value: spoofH, writable: false });
-
-        // 4. REMOVE THE RED CROSS OVERLAY
-        // This forcibly hides the "Screen access check" error UI
-        const badUI = document.querySelectorAll('.screen-error, .restriction-msg, [class*="error-icon"]');
-        badUI.forEach(el => el.style.display = 'none');
-    };
-
-    // Run every 100ms. This loop is lightweight and won't break the app.
-    FORCE_BYPASS();
-    setInterval(FORCE_BYPASS, 100);
-
-    // 5. RETAIN YOUR DESKTOP VIEWPORT LOGIC
-    let meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) {
-        meta = document.createElement('meta');
-        meta.name = 'viewport';
-        document.head.appendChild(meta);
-    }
-    meta.content = 'width=1280, initial-scale=0.3, user-scalable=yes';
-})();
-
-
-(function() {
-  console.log('🔧 FULL SCREEN SHARE TEST HELPER - ACTIVE');
-
-  // Create a more convincing mock stream
-  function createEnhancedMockStream() {
-    try {
-      // Create a canvas that simulates multiple displays
-      const canvas = document.createElement('canvas');
-      canvas.width = 3840; // Simulate dual monitor width
-      canvas.height = 1080;
-
-      const ctx = canvas.getContext('2d');
-
-      // Draw "Primary Display" section
-      ctx.fillStyle = '#2c3e50';
-      ctx.fillRect(0, 0, 1920, 1080);
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 48px Arial';
-      ctx.fillText('PRIMARY DISPLAY', 200, 300);
-      ctx.font = '24px Arial';
-      ctx.fillText('Browser Window', 200, 400);
-
-      // Draw taskbar/mock UI
-      ctx.fillStyle = '#34495e';
-      ctx.fillRect(0, 1000, 1920, 80);
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.fillText('Start', 20, 1050);
-
-      // Draw "Secondary Display" section
-      ctx.fillStyle = '#16a085';
-      ctx.fillRect(1920, 0, 1920, 1080);
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 48px Arial';
-      ctx.fillText('SECONDARY DISPLAY', 2120, 300);
-
-      // Draw some windows/applications
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(2200, 400, 400, 300);
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.fillText('App 1', 2350, 550);
-
-      ctx.fillStyle = '#f39c12';
-      ctx.fillRect(2700, 400, 400, 300);
-      ctx.fillStyle = 'white';
-      ctx.fillText('App 2', 2850, 550);
-
-      const stream = canvas.captureStream(30);
-
-      // Add display surface info to simulate multiple displays
-      if (stream.getVideoTracks && stream.getVideoTracks()[0]) {
-        const track = stream.getVideoTracks()[0];
-
-        // Mock the constraints to look like a full screen capture
-        Object.defineProperty(track, 'getSettings', {
-          value: function() {
-            return {
-              width: 3840,
-              height: 1080,
-              frameRate: 30,
-              displaySurface: 'monitor',
-              logicalSurface: true,
-              cursor: 'motion'
-            };
-          }
-        });
-
-        // Mock getConstraints to look like full screen
-        Object.defineProperty(track, 'getConstraints', {
-          value: function() {
-            return {
-              video: {
-                displaySurface: 'monitor',
-                width: { ideal: 3840 },
-                height: { ideal: 1080 }
-              }
-            };
-          }
-        });
-      }
-
-      return stream;
-    } catch(e) {
-      console.error('Failed to create mock stream:', e);
-      return null;
-    }
-  }
-
-  // Override ALL media APIs with full screen mock
-  const overrideAllMediaAPIs = function() {
-    // Override getDisplayMedia with full screen mock
-    if (navigator.mediaDevices) {
-      const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia;
-
-      navigator.mediaDevices.getDisplayMedia = function(constraints) {
-        console.log('✅ INTERCEPTED: getDisplayMedia with constraints:', constraints);
-
-        // Check if they're asking for entire screen
-        if (constraints?.video?.displaySurface === 'monitor' ||
-            constraints?.video?.displaySurface === 'application' ||
-            !constraints) {
-          console.log('✅ Returning full screen mock');
-          return Promise.resolve(createEnhancedMockStream());
-        }
-
-        // Fallback to original for other cases
-        return originalGetDisplayMedia.call(this, constraints);
-      };
-
-      // Also override older APIs
-      if (navigator.getDisplayMedia) {
-        navigator.getDisplayMedia = function(constraints) {
-          console.log('✅ INTERCEPTED: navigator.getDisplayMedia');
-          return Promise.resolve(createEnhancedMockStream());
-        };
-      }
-
-      if (navigator.webkitGetDisplayMedia) {
-        navigator.webkitGetDisplayMedia = function(constraints) {
-          console.log('✅ INTERCEPTED: webkitGetDisplayMedia');
-          return Promise.resolve(createEnhancedMockStream());
-        };
-      }
-    }
-
-    // Override MediaDevices prototype
-    if (window.MediaDevices && window.MediaDevices.prototype) {
-      window.MediaDevices.prototype.getDisplayMedia = function(constraints) {
-        console.log('✅ INTERCEPTED: MediaDevices.prototype.getDisplayMedia');
-        return Promise.resolve(createEnhancedMockStream());
-      };
-    }
-  };
-
-  // Run immediately and on timer
-  overrideAllMediaAPIs();
-  setInterval(overrideAllMediaAPIs, 500);
-
-  // Specifically patch your app's getUserScreenShare method
-  const patchAppMethod = setInterval(() => {
-    if (window.testService && window.testService.getUserScreenShare) {
-      console.log('✅ Found testService.getUserScreenShare, patching...');
-
-      const original = window.testService.getUserScreenShare;
-      window.testService.getUserScreenShare = function() {
-        console.log('✅ INTERCEPTED: testService.getUserScreenShare');
-        const mockStream = createEnhancedMockStream();
-
-        // Add some metadata to look like a real screen share
-        mockStream.getTracks()[0].label = 'Screen 1 (Entire Screen)';
-
-        return Promise.resolve({
-          ...mockStream,
-          getVideoTracks: () => [{
-            ...mockStream.getVideoTracks()[0],
-            getSettings: () => ({
-              width: 3840,
-              height: 1080,
-              frameRate: 30,
-              displaySurface: 'monitor',
-              logicalSurface: true,
-              cursor: 'motion'
-            })
-          }]
-        });
-      };
-
-      clearInterval(patchAppMethod);
-    }
-  }, 100);
-
-  // Override any permission checks
-  const originalPermissionsQuery = navigator.permissions?.query;
-  if (navigator.permissions) {
-    navigator.permissions.query = function(perm) {
-      if (perm.name === 'display-capture' || perm.name === 'screen-capture') {
-        console.log('✅ INTERCEPTED: permissions query for display-capture');
-        return Promise.resolve({ state: 'granted' });
-      }
-      return originalPermissionsQuery.call(this, perm);
-    };
-  }
-
-  console.log('🔧 FULL SCREEN SHARE TEST HELPER - READY');
-})();
-
-
-(function() {
-  console.log('🔧 FULL SCREEN SHARE TEST HELPER - ACTIVE');
-  
-  // Create a more convincing mock stream
-  function createEnhancedMockStream() {
-    try {
-      // Create a canvas that simulates multiple displays
-      const canvas = document.createElement('canvas');
-      canvas.width = 3840; // Simulate dual monitor width
-      canvas.height = 1080;
-      
-      const ctx = canvas.getContext('2d');
-      
-      // Draw "Primary Display" section
-      ctx.fillStyle = '#2c3e50';
-      ctx.fillRect(0, 0, 1920, 1080);
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 48px Arial';
-      ctx.fillText('PRIMARY DISPLAY', 200, 300);
-      ctx.font = '24px Arial';
-      ctx.fillText('Browser Window', 200, 400);
-      
-      // Draw taskbar/mock UI
-      ctx.fillStyle = '#34495e';
-      ctx.fillRect(0, 1000, 1920, 80);
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.fillText('Start', 20, 1050);
-      
-      // Draw "Secondary Display" section
-      ctx.fillStyle = '#16a085';
-      ctx.fillRect(1920, 0, 1920, 1080);
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 48px Arial';
-      ctx.fillText('SECONDARY DISPLAY', 2120, 300);
-      
-      // Draw some windows/applications
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(2200, 400, 400, 300);
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.fillText('App 1', 2350, 550);
-      
-      ctx.fillStyle = '#f39c12';
-      ctx.fillRect(2700, 400, 400, 300);
-      ctx.fillStyle = 'white';
-      ctx.fillText('App 2', 2850, 550);
-      
-      const stream = canvas.captureStream(30);
-      
-      // Add display surface info to simulate multiple displays
-      if (stream.getVideoTracks && stream.getVideoTracks()[0]) {
-        const track = stream.getVideoTracks()[0];
-        
-        // Mock the constraints to look like a full screen capture
-        Object.defineProperty(track, 'getSettings', {
-          value: function() {
-            return {
-              width: 3840,
-              height: 1080,
-              frameRate: 30,
-              displaySurface: 'monitor',
-              logicalSurface: true,
-              cursor: 'motion'
-            };
-          }
-        });
-        
-        // Mock getConstraints to look like full screen
-        Object.defineProperty(track, 'getConstraints', {
-          value: function() {
-            return {
-              video: {
-                displaySurface: 'monitor',
-                width: { ideal: 3840 },
-                height: { ideal: 1080 }
-              }
-            };
-          }
-        });
-      }
-      
-      return stream;
-    } catch(e) {
-      console.error('Failed to create mock stream:', e);
-      return null;
-    }
-  }
-
-  // Override ALL media APIs with full screen mock
-  const overrideAllMediaAPIs = function() {
-    // Override getDisplayMedia with full screen mock
-    if (navigator.mediaDevices) {
-      const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia;
-      
-      navigator.mediaDevices.getDisplayMedia = function(constraints) {
-        console.log('✅ INTERCEPTED: getDisplayMedia with constraints:', constraints);
-        
-        // Check if they're asking for entire screen
-        if (constraints?.video?.displaySurface === 'monitor' || 
-            constraints?.video?.displaySurface === 'application' ||
-            !constraints) {
-          console.log('✅ Returning full screen mock');
-          return Promise.resolve(createEnhancedMockStream());
-        }
-        
-        // Fallback to original for other cases
-        return originalGetDisplayMedia.call(this, constraints);
-      };
-      
-      // Also override older APIs
-      if (navigator.getDisplayMedia) {
-        navigator.getDisplayMedia = function(constraints) {
-          console.log('✅ INTERCEPTED: navigator.getDisplayMedia');
-          return Promise.resolve(createEnhancedMockStream());
-        };
-      }
-      
-      if (navigator.webkitGetDisplayMedia) {
-        navigator.webkitGetDisplayMedia = function(constraints) {
-          console.log('✅ INTERCEPTED: webkitGetDisplayMedia');
-          return Promise.resolve(createEnhancedMockStream());
-        };
-      }
-    }
-    
-    // Override MediaDevices prototype
-    if (window.MediaDevices && window.MediaDevices.prototype) {
-      window.MediaDevices.prototype.getDisplayMedia = function(constraints) {
-        console.log('✅ INTERCEPTED: MediaDevices.prototype.getDisplayMedia');
-        return Promise.resolve(createEnhancedMockStream());
-      };
-    }
-  };
-  
-  // Run immediately and on timer
-  overrideAllMediaAPIs();
-  setInterval(overrideAllMediaAPIs, 500);
-  
-  // Specifically patch your app's getUserScreenShare method
-  const patchAppMethod = setInterval(() => {
-    if (window.testService && window.testService.getUserScreenShare) {
-      console.log('✅ Found testService.getUserScreenShare, patching...');
-      
-      const original = window.testService.getUserScreenShare;
-      window.testService.getUserScreenShare = function() {
-        console.log('✅ INTERCEPTED: testService.getUserScreenShare');
-        const mockStream = createEnhancedMockStream();
-        
-        // Add some metadata to look like a real screen share
-        mockStream.getTracks()[0].label = 'Screen 1 (Entire Screen)';
-        
-        return Promise.resolve({
-          ...mockStream,
-          getVideoTracks: () => [{
-            ...mockStream.getVideoTracks()[0],
-            getSettings: () => ({
-              width: 3840,
-              height: 1080,
-              frameRate: 30,
-              displaySurface: 'monitor',
-              logicalSurface: true,
-              cursor: 'motion'
-            })
-          }]
-        });
-      };
-      
-      clearInterval(patchAppMethod);
-    }
-  }, 100);
-  
-  // Override any permission checks
-  const originalPermissionsQuery = navigator.permissions?.query;
-  if (navigator.permissions) {
-    navigator.permissions.query = function(perm) {
-      if (perm.name === 'display-capture' || perm.name === 'screen-capture') {
-        console.log('✅ INTERCEPTED: permissions query for display-capture');
-        return Promise.resolve({ state: 'granted' });
-      }
-      return originalPermissionsQuery.call(this, perm);
-    };
-  }
-  
-  console.log('🔧 FULL SCREEN SHARE TEST HELPER - READY');
 })();
