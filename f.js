@@ -60,7 +60,7 @@
     const API_URL = BACKEND_URL + '/chat/completions';
     
     // ⚠️ HARDCODED API KEY - Replace with your actual key
-    const API_KEY = "YOUR_OPENCODE_ZEN_API_KEY_HERE"; // <-- PASTE YOUR API KEY HERE
+    const API_KEY = "sk-vyk3ptZrlp4YKVE1N5BFbhroJLsqb8cTl28eJahkfXfLQKfSzY71B6uQ0oFEtEYA"; // <-- PASTE YOUR API KEY HERE
     
     // Using DeepSeek V4 Free model
     const DEFAULT_MODEL = "deepseek-v4-flash-free";
