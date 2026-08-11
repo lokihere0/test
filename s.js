@@ -8,6 +8,92 @@
     const modKey = isMac ? '⌘' : 'Ctrl';
     const altKey = isMac ? '⌥' : 'Alt';
     
+    // ============ FORCE TEXT SELECTION - SAFE VERSION ============
+    function forceTextSelection() {
+        // Only target text-containing elements, NOT interactive ones
+        const styleOverride = document.createElement('style');
+        styleOverride.id = 'sdp-force-select-override';
+        styleOverride.textContent = `
+            /* Force selection on text elements only */
+            p, div, span, h1, h2, h3, h4, h5, h6, li, td, th, label, 
+            .text, .content, .description, .message, .comment, .post,
+            [class*="text"], [class*="content"], [class*="message"] {
+                user-select: auto !important;
+                -webkit-user-select: auto !important;
+                -moz-user-select: auto !important;
+                -ms-user-select: auto !important;
+            }
+            
+            /* NEVER override selection on interactive elements */
+            input, textarea, button, select, option, a, [role="button"], 
+            [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"],
+            [contenteditable="true"], .btn, .button, .clickable,
+            input[type="text"], input[type="password"], input[type="email"], 
+            input[type="search"], input[type="number"], input[type="tel"],
+            .no-select, .noselect, [class*="no-select"], [class*="noselect"] {
+                user-select: auto !important;
+                -webkit-user-select: auto !important;
+                -moz-user-select: auto !important;
+                -ms-user-select: auto !important;
+                cursor: auto !important;
+                pointer-events: auto !important;
+            }
+            
+            /* Text cursor only for text areas */
+            textarea, input[type="text"], input[type="password"], 
+            input[type="email"], input[type="search"], [contenteditable="true"] {
+                cursor: text !important;
+            }
+            
+            /* Fix any broken pointer events */
+            * {
+                pointer-events: auto !important;
+            }
+            
+            /* But keep pointer-events: none on elements that need it */
+            .sdp-notification, .sdp-copy-selected-btn, #sdp-widget * {
+                pointer-events: auto !important;
+            }
+        `;
+        document.head.appendChild(styleOverride);
+        
+        // Fix any inline styles that might break interactivity
+        const fixElements = () => {
+            const elements = document.querySelectorAll('*');
+            elements.forEach(el => {
+                // Only remove user-select:none from text elements
+                if (el.style && el.style.userSelect === 'none') {
+                    const tag = el.tagName.toLowerCase();
+                    const isInteractive = ['input', 'textarea', 'button', 'select', 'a'].includes(tag);
+                    const hasRole = el.getAttribute('role');
+                    const isContentEditable = el.isContentEditable;
+                    
+                    // Only remove if NOT interactive
+                    if (!isInteractive && !hasRole && !isContentEditable) {
+                        el.style.userSelect = 'auto';
+                        el.style.webkitUserSelect = 'auto';
+                        el.style.msUserSelect = 'auto';
+                    }
+                }
+            });
+        };
+        
+        fixElements();
+        
+        // Monitor for dynamically added elements
+        const observer = new MutationObserver(() => fixElements());
+        observer.observe(document.body, { childList: true, subtree: true });
+        
+        console.log('[SDP] Force text selection enabled (safe mode)');
+    }
+    
+    // Run immediately
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', forceTextSelection);
+    } else {
+        forceTextSelection();
+    }
+    
     // ============ SESSION STORAGE CLIPBOARD ============
     const CLIPBOARD_KEY = 'shadowpasser_clipboard';
     const CLIPBOARD_TIME_KEY = 'shadowpasser_clipboard_time';
@@ -28,7 +114,7 @@
             const time = sessionStorage.getItem(CLIPBOARD_TIME_KEY);
             if (text && time) {
                 const age = Date.now() - parseInt(time);
-                if (age > 600000) { // 10 minutes
+                if (age > 600000) {
                     sessionStorage.removeItem(CLIPBOARD_KEY);
                     sessionStorage.removeItem(CLIPBOARD_TIME_KEY);
                     return null;
@@ -97,29 +183,12 @@
             }
         } catch(e) {}
         
-        // Method 3: document.getSelection fallback
+        // Method 3: Try to get from document
         try {
             const sel = document.getSelection();
             if (sel && sel.toString().trim()) {
                 text = sel.toString().trim();
                 if (text) return text;
-            }
-        } catch(e) {}
-        
-        // Method 4: Try all iframes
-        try {
-            const iframes = document.querySelectorAll('iframe');
-            for (let iframe of iframes) {
-                try {
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (doc) {
-                        const sel = doc.getSelection();
-                        if (sel && sel.toString().trim()) {
-                            text = sel.toString().trim();
-                            if (text) return text;
-                        }
-                    }
-                } catch(e) {}
             }
         } catch(e) {}
         
@@ -289,6 +358,35 @@
                 cursor: text !important;
                 user-select: auto !important;
             }
+            
+            .sdp-copy-selected-btn {
+                background: linear-gradient(135deg, #10a37f, #0d8b6e);
+                border: none;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 12px;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+                pointer-events: auto;
+                font-family: inherit;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .sdp-copy-selected-btn:hover {
+                transform: scale(1.05);
+                box-shadow: 0 4px 12px rgba(16, 163, 127, 0.3);
+            }
+            .sdp-copy-selected-btn:active {
+                transform: scale(0.95);
+            }
+            .sdp-copy-selected-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none !important;
+            }
         `;
         document.head.appendChild(style);
         
@@ -323,6 +421,8 @@
             align-items: center;
             cursor: move;
             flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 8px;
         `;
         
         const titleSection = document.createElement('div');
@@ -352,8 +452,53 @@
         titleSection.appendChild(titleText);
         
         const actions = document.createElement('div');
-        actions.style.cssText = 'display: flex; gap: 8px;';
+        actions.style.cssText = 'display: flex; gap: 8px; align-items: center; flex-wrap: wrap;';
         
+        // ============ COPY SELECTED BUTTON ============
+        const copySelectedBtn = document.createElement('button');
+        copySelectedBtn.className = 'sdp-copy-selected-btn';
+        copySelectedBtn.innerHTML = '📋 Copy Selected';
+        copySelectedBtn.title = 'Copy currently selected text to internal clipboard';
+        copySelectedBtn.onclick = function() {
+            const selectedText = getSelectedText();
+            if (selectedText) {
+                if (setClipboard(selectedText)) {
+                    showNotification('✓ Copied selected text to internal clipboard', '#10a37f');
+                    copySelectedBtn.innerHTML = '✅ Copied!';
+                    setTimeout(() => {
+                        copySelectedBtn.innerHTML = '📋 Copy Selected';
+                    }, 2000);
+                }
+            } else {
+                showNotification('✗ No text selected', '#ef4444');
+                copySelectedBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                setTimeout(() => {
+                    copySelectedBtn.style.background = 'linear-gradient(135deg, #10a37f, #0d8b6e)';
+                }, 2000);
+            }
+        };
+        
+        // Update button state when selection changes
+        function updateCopyButton() {
+            const selectedText = getSelectedText();
+            if (selectedText) {
+                copySelectedBtn.disabled = false;
+                copySelectedBtn.style.opacity = '1';
+                copySelectedBtn.title = `Copy: "${selectedText.substring(0, 30)}${selectedText.length > 30 ? '...' : ''}"`;
+            } else {
+                copySelectedBtn.disabled = true;
+                copySelectedBtn.style.opacity = '0.5';
+                copySelectedBtn.title = 'No text selected';
+            }
+        }
+        
+        // Watch for selection changes
+        document.addEventListener('selectionchange', updateCopyButton);
+        document.addEventListener('click', updateCopyButton);
+        document.addEventListener('keyup', updateCopyButton);
+        setTimeout(updateCopyButton, 500);
+        
+        // Close button
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '✕';
         closeBtn.style.cssText = `
@@ -368,9 +513,21 @@
             font-family: inherit;
             pointer-events: auto;
         `;
+        closeBtn.onmouseenter = () => {
+            closeBtn.style.background = 'rgba(239,68,68,0.2)';
+            closeBtn.style.borderColor = '#ef4444';
+            closeBtn.style.color = '#ef4444';
+        };
+        closeBtn.onmouseleave = () => {
+            closeBtn.style.background = 'rgba(102,126,234,0.1)';
+            closeBtn.style.borderColor = 'rgba(102,126,234,0.2)';
+            closeBtn.style.color = '#a0aec0';
+        };
         closeBtn.onclick = () => { widget.style.display = 'none'; };
         
+        actions.appendChild(copySelectedBtn);
         actions.appendChild(closeBtn);
+        
         header.appendChild(titleSection);
         header.appendChild(actions);
         
@@ -401,7 +558,7 @@
             <div style="font-size: 48px; margin-bottom: 12px;">🚀</div>
             <div style="font-weight: 700; font-size: 20px; margin-bottom: 8px; color: #fff;">ShadowPasser AI</div>
             <div style="font-size: 13px; color: #a0aec0; margin-bottom: 16px;">Powered by Groq • Llama 3.3 70B</div>
-            <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea;">
+            <div style="display: flex; gap: 12px; justify-content: center; font-size: 12px; color: #667eea; flex-wrap: wrap;">
                 <span>${modKey}+${altKey}+H (Toggle)</span>
                 <span>•</span>
                 <span>${modKey}+${altKey}+M (Copy)</span>
@@ -409,7 +566,7 @@
                 <span>${modKey}+${altKey}+N (Paste)</span>
             </div>
             <div style="margin-top: 12px; font-size: 11px; color: #a0aec0;">
-                💡 Select text anywhere, press ${modKey}+${altKey}+M to copy
+                💡 Select text anywhere, then click <strong style="color: #10a37f;">"Copy Selected"</strong> button above
             </div>
             <div style="margin-top: 8px; font-size: 10px; color: #10a37f;">
                 ✅ Model: ${DEFAULT_MODEL}
@@ -492,7 +649,7 @@
         let dragOffsetX, dragOffsetY;
         
         header.addEventListener('mousedown', (e) => {
-            if (e.target === closeBtn) return;
+            if (e.target === closeBtn || e.target === copySelectedBtn) return;
             isDragging = true;
             dragOffsetX = e.clientX - widget.offsetLeft;
             dragOffsetY = e.clientY - widget.offsetTop;
@@ -631,43 +788,47 @@
         
         // ============ KEYBOARD SHORTCUTS ============
         document.addEventListener('keydown', function(e) {
-            const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-            const isAlt = e.altKey;
+            const ctrl = e.ctrlKey || e.metaKey;
+            const alt = e.altKey;
+            const key = e.key.toLowerCase();
             
             // Toggle: Ctrl+Alt+H
-            if (isCtrlOrCmd && isAlt && (e.key === 'h' || e.key === 'H')) {
+            if (ctrl && alt && key === 'h') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 if (widget.style.display === 'none') {
                     widget.style.display = 'flex';
                     input.focus();
+                    updateCopyButton();
                 } else {
                     widget.style.display = 'none';
                 }
-                return;
+                return false;
             }
             
-            // Copy: Ctrl+Alt+M - Uses sessionStorage
-            if (isCtrlOrCmd && isAlt && (e.key === 'm' || e.key === 'M')) {
+            // Copy: Ctrl+Alt+M
+            if (ctrl && alt && key === 'm') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 const selectedText = getSelectedText();
                 if (selectedText) {
                     if (setClipboard(selectedText)) {
                         showNotification('✓ Copied to internal clipboard', '#10a37f');
-                    } else {
-                        showNotification('✗ Failed to save to clipboard', '#ef4444');
+                        setTimeout(updateCopyButton, 100);
                     }
                 } else {
                     showNotification('✗ No text selected', '#ef4444');
                 }
-                return;
+                return false;
             }
             
-            // Paste: Ctrl+Alt+N - Uses sessionStorage
-            if (isCtrlOrCmd && isAlt && (e.key === 'n' || e.key === 'N')) {
+            // Paste: Ctrl+Alt+N
+            if (ctrl && alt && key === 'n') {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 const clipboardText = getClipboard();
                 if (clipboardText) {
                     const activeEl = document.activeElement;
@@ -684,9 +845,9 @@
                 } else {
                     showNotification('✗ Internal clipboard is empty', '#ef4444');
                 }
-                return;
+                return false;
             }
-        });
+        }, true);
         
         // Send on Enter (not Shift+Enter)
         input.addEventListener('keydown', (e) => {
@@ -700,6 +861,7 @@
         
         // Show widget by default
         widget.style.display = 'flex';
+        setTimeout(updateCopyButton, 300);
     }
     
     // ============ INITIALIZE ============
