@@ -8,9 +8,38 @@
     const modKey = isMac ? '⌘' : 'Ctrl';
     const altKey = isMac ? '⌥' : 'Alt';
     
-    // ============ INTERNAL CLIPBOARD ============
-    let internalClipboard = '';
-    let clipboardTimestamp = null;
+    // ============ SESSION STORAGE CLIPBOARD ============
+    const CLIPBOARD_KEY = 'shadowpasser_clipboard';
+    const CLIPBOARD_TIME_KEY = 'shadowpasser_clipboard_time';
+    
+    function setClipboard(text) {
+        try {
+            sessionStorage.setItem(CLIPBOARD_KEY, text);
+            sessionStorage.setItem(CLIPBOARD_TIME_KEY, Date.now().toString());
+            return true;
+        } catch(e) {
+            return false;
+        }
+    }
+    
+    function getClipboard() {
+        try {
+            const text = sessionStorage.getItem(CLIPBOARD_KEY);
+            const time = sessionStorage.getItem(CLIPBOARD_TIME_KEY);
+            if (text && time) {
+                const age = Date.now() - parseInt(time);
+                if (age > 600000) { // 10 minutes
+                    sessionStorage.removeItem(CLIPBOARD_KEY);
+                    sessionStorage.removeItem(CLIPBOARD_TIME_KEY);
+                    return null;
+                }
+                return text;
+            }
+            return null;
+        } catch(e) {
+            return null;
+        }
+    }
     
     function showNotification(msg, color) {
         const notif = document.createElement('div');
@@ -33,28 +62,20 @@
         setTimeout(() => notif.remove(), 2000);
     }
     
-    // ============ MULTI-LAYER TEXT SELECTION ============
+    // ============ UNIVERSAL TEXT SELECTION ============
     function getSelectedText() {
         let text = '';
-        let debug = [];
         
-        // LAYER 1: Try window.getSelection()
+        // Method 1: window.getSelection
         try {
-            const selection = window.getSelection();
-            if (selection) {
-                const selected = selection.toString();
-                if (selected && selected.trim()) {
-                    text = selected.trim();
-                    debug.push('Layer 1 (window.getSelection): ' + text.substring(0, 50));
-                    console.log('[Copy] Layer 1 success:', text.substring(0, 50) + '...');
-                    return text;
-                }
+            const sel = window.getSelection();
+            if (sel && sel.toString().trim()) {
+                text = sel.toString().trim();
+                if (text) return text;
             }
-        } catch(e) {
-            debug.push('Layer 1 error: ' + e.message);
-        }
+        } catch(e) {}
         
-        // LAYER 2: Try document.activeElement (input/textarea)
+        // Method 2: document.activeElement (input/textarea)
         try {
             const el = document.activeElement;
             if (el) {
@@ -62,79 +83,46 @@
                     const start = el.selectionStart || 0;
                     const end = el.selectionEnd || 0;
                     if (start !== end) {
-                        text = el.value.substring(start, end);
-                        if (text && text.trim()) {
-                            text = text.trim();
-                            debug.push('Layer 2 (input/textarea): ' + text.substring(0, 50));
-                            console.log('[Copy] Layer 2 success:', text.substring(0, 50) + '...');
-                            return text;
-                        }
+                        text = el.value.substring(start, end).trim();
+                        if (text) return text;
                     }
                 }
-                
-                // LAYER 3: Try contenteditable
                 if (el.isContentEditable) {
-                    const selection = window.getSelection();
-                    if (selection && selection.toString()) {
-                        text = selection.toString().trim();
-                        if (text) {
-                            debug.push('Layer 3 (contenteditable): ' + text.substring(0, 50));
-                            console.log('[Copy] Layer 3 success:', text.substring(0, 50) + '...');
-                            return text;
-                        }
+                    const sel = window.getSelection();
+                    if (sel && sel.toString().trim()) {
+                        text = sel.toString().trim();
+                        if (text) return text;
                     }
                 }
             }
-        } catch(e) {
-            debug.push('Layer 2/3 error: ' + e.message);
-        }
+        } catch(e) {}
         
-        // LAYER 4: Try document selection from iframe
+        // Method 3: document.getSelection fallback
+        try {
+            const sel = document.getSelection();
+            if (sel && sel.toString().trim()) {
+                text = sel.toString().trim();
+                if (text) return text;
+            }
+        } catch(e) {}
+        
+        // Method 4: Try all iframes
         try {
             const iframes = document.querySelectorAll('iframe');
             for (let iframe of iframes) {
                 try {
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (iframeDoc) {
-                        const selection = iframeDoc.getSelection();
-                        if (selection && selection.toString()) {
-                            text = selection.toString().trim();
-                            if (text) {
-                                debug.push('Layer 4 (iframe): ' + text.substring(0, 50));
-                                console.log('[Copy] Layer 4 success:', text.substring(0, 50) + '...');
-                                return text;
-                            }
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc) {
+                        const sel = doc.getSelection();
+                        if (sel && sel.toString().trim()) {
+                            text = sel.toString().trim();
+                            if (text) return text;
                         }
                     }
-                } catch(e) {
-                    // Cross-origin iframe, skip
-                }
+                } catch(e) {}
             }
-        } catch(e) {
-            debug.push('Layer 4 error: ' + e.message);
-        }
+        } catch(e) {}
         
-        // LAYER 5: Try shadow DOM
-        try {
-            const allElements = document.querySelectorAll('*');
-            for (let el of allElements) {
-                if (el.shadowRoot) {
-                    const selection = el.shadowRoot.getSelection ? el.shadowRoot.getSelection() : null;
-                    if (selection && selection.toString()) {
-                        text = selection.toString().trim();
-                        if (text) {
-                            debug.push('Layer 5 (shadow DOM): ' + text.substring(0, 50));
-                            console.log('[Copy] Layer 5 success:', text.substring(0, 50) + '...');
-                            return text;
-                        }
-                    }
-                }
-            }
-        } catch(e) {
-            debug.push('Layer 5 error: ' + e.message);
-        }
-        
-        console.log('[Copy] All layers failed. Debug:', debug);
         return '';
     }
     
@@ -184,9 +172,9 @@
     
     // Expose clipboard copy for inline buttons
     window._sdpClipboardCopy = function(text) {
-        internalClipboard = text;
-        clipboardTimestamp = Date.now();
-        showNotification('✓ Copied to internal clipboard', '#10a37f');
+        if (setClipboard(text)) {
+            showNotification('✓ Copied to internal clipboard', '#10a37f');
+        }
     };
     
     // ============ CREATE WIDGET ============
@@ -659,44 +647,42 @@
                 return;
             }
             
-            // Copy: Ctrl+Alt+M
+            // Copy: Ctrl+Alt+M - Uses sessionStorage
             if (isCtrlOrCmd && isAlt && (e.key === 'm' || e.key === 'M')) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('[Copy] Shortcut triggered');
                 const selectedText = getSelectedText();
-                console.log('[Copy] Selected text length:', selectedText ? selectedText.length : 0);
                 if (selectedText) {
-                    internalClipboard = selectedText;
-                    clipboardTimestamp = Date.now();
-                    showNotification('✓ Copied to internal clipboard', '#10a37f');
-                    console.log('[Copy] Successfully copied:', selectedText.substring(0, 50) + '...');
+                    if (setClipboard(selectedText)) {
+                        showNotification('✓ Copied to internal clipboard', '#10a37f');
+                    } else {
+                        showNotification('✗ Failed to save to clipboard', '#ef4444');
+                    }
                 } else {
                     showNotification('✗ No text selected', '#ef4444');
-                    console.log('[Copy] No text selected');
                 }
                 return;
             }
             
-            // Paste: Ctrl+Alt+N
+            // Paste: Ctrl+Alt+N - Uses sessionStorage
             if (isCtrlOrCmd && isAlt && (e.key === 'n' || e.key === 'N')) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('[Paste] Shortcut triggered');
-                if (internalClipboard) {
+                const clipboardText = getClipboard();
+                if (clipboardText) {
                     const activeEl = document.activeElement;
                     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
                         const start = activeEl.selectionStart || 0;
                         const end = activeEl.selectionEnd || 0;
-                        activeEl.value = activeEl.value.substring(0, start) + internalClipboard + activeEl.value.substring(end);
-                        activeEl.selectionStart = activeEl.selectionEnd = start + internalClipboard.length;
+                        activeEl.value = activeEl.value.substring(0, start) + clipboardText + activeEl.value.substring(end);
+                        activeEl.selectionStart = activeEl.selectionEnd = start + clipboardText.length;
                         activeEl.dispatchEvent(new Event('input', { bubbles: true }));
                         showNotification('✓ Pasted from internal clipboard', '#10a37f');
-                        console.log('[Paste] Pasted successfully');
+                    } else {
+                        showNotification('✗ Click into a text field first', '#f97316');
                     }
                 } else {
                     showNotification('✗ Internal clipboard is empty', '#ef4444');
-                    console.log('[Paste] Clipboard empty');
                 }
                 return;
             }
